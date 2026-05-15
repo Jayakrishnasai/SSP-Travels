@@ -28,4 +28,3 @@ To learn more about Next.js, take a look at the following resources:
 ## Deployment
 
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new).
-
