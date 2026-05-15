@@ -68,7 +68,7 @@ export default function StandardHomepage() {
           {/* Heading */}
           <div className="text-center mb-10">
             <p className="text-xs uppercase tracking-[0.35em] text-cyan-400 font-semibold mb-3">
-              India's Premium Bus Network
+              India&apos;s Premium Bus Network
             </p>
             <h2 className="text-4xl lg:text-6xl font-black tracking-tight text-white leading-tight">
               Ready for your{" "}
@@ -108,15 +108,16 @@ export default function StandardHomepage() {
                 {/* From */}
                 <div className="search-field flex items-center flex-1 px-6 py-5 border-b md:border-b-0 md:border-r border-white/10 hover:bg-white/5 md:rounded-l-[1.5rem] transition-colors cursor-text group/field">
                   <MapPin className="text-cyan-400 w-6 h-6 mr-4 shrink-0" />
-                  <div className="flex flex-col w-full min-w-0">
+                  <label htmlFor="from-city" className="flex flex-col w-full min-w-0 cursor-pointer">
                     <span className="text-[10px] uppercase tracking-widest text-cyan-400/70 font-bold mb-1">From</span>
                     <input
+                      id="from-city"
                       type="text"
                       placeholder="Origin City"
                       defaultValue="Mumbai"
                       className="bg-transparent border-none outline-none w-full text-white placeholder:text-white/30 font-bold text-xl truncate"
                     />
-                  </div>
+                  </label>
                 </div>
 
                 {/* Swap icon */}
@@ -127,28 +128,46 @@ export default function StandardHomepage() {
                 {/* To */}
                 <div className="search-field flex items-center flex-1 px-6 py-5 border-b md:border-b-0 md:border-r border-white/10 hover:bg-white/5 transition-colors cursor-text">
                   <MapPin className="text-white/40 w-6 h-6 mr-4 shrink-0" />
-                  <div className="flex flex-col w-full min-w-0">
+                  <label htmlFor="to-city" className="flex flex-col w-full min-w-0 cursor-pointer">
                     <span className="text-[10px] uppercase tracking-widest text-white/40 font-bold mb-1">To</span>
                     <input
+                      id="to-city"
                       type="text"
                       placeholder="Destination City"
                       defaultValue="Pune"
                       className="bg-transparent border-none outline-none w-full text-white placeholder:text-white/30 font-bold text-xl truncate"
                     />
-                  </div>
+                  </label>
                 </div>
 
                 {/* Date */}
                 <div className="search-field flex items-center flex-1 px-6 py-5 border-b md:border-b-0 hover:bg-white/5 transition-colors cursor-text">
                   <Calendar className="text-cyan-400 w-6 h-6 mr-4 shrink-0" />
-                  <div className="flex flex-col w-full min-w-0">
+                  <label htmlFor="journey-date" className="flex flex-col w-full min-w-0 cursor-pointer">
                     <span className="text-[10px] uppercase tracking-widest text-cyan-400/70 font-bold mb-1">Journey Date</span>
                     <input
+                      id="journey-date"
                       type="date"
+                      defaultValue={new Date().toISOString().split('T')[0]}
                       className="bg-transparent border-none outline-none w-full text-white font-bold text-xl [&::-webkit-calendar-picker-indicator]:invert"
                     />
-                  </div>
+                  </label>
                 </div>
+
+                {/* Return Date (Visible only for Round Trip) */}
+                {activeTab === "return" && (
+                  <div className="search-field flex items-center flex-1 px-6 py-5 border-b md:border-b-0 md:border-r border-white/10 hover:bg-white/5 transition-colors cursor-text animate-fade-in">
+                    <Calendar className="text-purple-400 w-6 h-6 mr-4 shrink-0" />
+                    <label htmlFor="return-date" className="flex flex-col w-full min-w-0 cursor-pointer">
+                      <span className="text-[10px] uppercase tracking-widest text-purple-400/70 font-bold mb-1">Return Date</span>
+                      <input
+                        id="return-date"
+                        type="date"
+                        className="bg-transparent border-none outline-none w-full text-white font-bold text-xl [&::-webkit-calendar-picker-indicator]:invert"
+                      />
+                    </label>
+                  </div>
+                )}
 
                 {/* CTA */}
                 <div className="p-2 flex items-center">

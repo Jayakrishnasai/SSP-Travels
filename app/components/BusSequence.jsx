@@ -13,36 +13,43 @@ export default function BusSequence({ scrollProgress, opacity }) {
   const canvasRef = useRef(null);
   const imagesRef = useRef([]);
   const [imagesLoaded, setImagesLoaded] = useState(0);
+  const isMounted = useRef(true);
 
   // Preload images
   useEffect(() => {
+    isMounted.current = true;
     const images = [];
-    let loaded = 0;
+    let loadedCount = 0;
 
+    // Load in chunks or throttle state updates
     for (let i = 0; i < FRAME_COUNT; i++) {
       const img = new Image();
       img.src = getFramePath(i);
       img.onload = () => {
-        loaded++;
-        setImagesLoaded(loaded);
+        loadedCount++;
+        // Update state every 10 images or when finished to reduce re-renders
+        if (isMounted.current && (loadedCount % 10 === 0 || loadedCount === FRAME_COUNT)) {
+          setImagesLoaded(loadedCount);
+        }
       };
       images.push(img);
     }
     imagesRef.current = images;
+
+    return () => {
+      isMounted.current = false;
+    };
   }, []);
 
   // Draw frame on canvas
   const renderFrame = (index) => {
-    if (!canvasRef.current || imagesRef.current.length === 0) return;
-    
     const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d");
+    if (!canvas || imagesRef.current.length === 0) return;
+    
+    const ctx = canvas.getContext("2d", { alpha: false }); // Optimize for opaque images
     const img = imagesRef.current[index];
 
     if (img && img.complete) {
-      // Clear canvas
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
       // Calculate scale to cover the canvas while maintaining aspect ratio
       const canvasRatio = canvas.width / canvas.height;
       const imgRatio = img.width / img.height;
@@ -50,13 +57,11 @@ export default function BusSequence({ scrollProgress, opacity }) {
       let drawWidth, drawHeight, offsetX, offsetY;
 
       if (canvasRatio > imgRatio) {
-        // Canvas is wider than image
         drawWidth = canvas.width;
         drawHeight = canvas.width / imgRatio;
         offsetX = 0;
         offsetY = (canvas.height - drawHeight) / 2;
       } else {
-        // Canvas is taller than image
         drawHeight = canvas.height;
         drawWidth = canvas.height * imgRatio;
         offsetX = (canvas.width - drawWidth) / 2;
@@ -71,14 +76,15 @@ export default function BusSequence({ scrollProgress, opacity }) {
   useEffect(() => {
     const handleResize = () => {
       if (canvasRef.current) {
-        // Use device pixel ratio for sharp rendering
         const dpr = window.devicePixelRatio || 1;
-        canvasRef.current.width = window.innerWidth * dpr;
-        canvasRef.current.height = window.innerHeight * dpr;
-        canvasRef.current.style.width = `${window.innerWidth}px`;
-        canvasRef.current.style.height = `${window.innerHeight}px`;
+        const width = window.innerWidth;
+        const height = window.innerHeight;
         
-        // Re-render current frame after resize
+        canvasRef.current.width = width * dpr;
+        canvasRef.current.height = height * dpr;
+        canvasRef.current.style.width = `${width}px`;
+        canvasRef.current.style.height = `${height}px`;
+        
         const currentIndex = Math.floor(scrollProgress.get() * (FRAME_COUNT - 1));
         renderFrame(currentIndex);
       }
@@ -92,23 +98,31 @@ export default function BusSequence({ scrollProgress, opacity }) {
 
   // Update frame on scroll
   useMotionValueEvent(scrollProgress, "change", (latest) => {
-    // latest is a value between 0 and 1
     const frameIndex = Math.floor(latest * (FRAME_COUNT - 1));
-    requestAnimationFrame(() => renderFrame(frameIndex));
+    renderFrame(frameIndex);
   });
 
   return (
     <motion.div 
-      className="fixed inset-0 z-0 pointer-events-none"
+      className="fixed inset-0 z-0 pointer-events-none bg-black"
       style={{ opacity }}
     >
-      <canvas ref={canvasRef} className="w-full h-full object-cover" />
+      <canvas ref={canvasRef} className="w-full h-full block" />
       
-      {/* Loading overlay - optional, can be removed or styled differently */}
-      {imagesLoaded < FRAME_COUNT * 0.2 && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50 transition-opacity duration-500">
-          <div className="text-white text-xl font-light tracking-widest animate-pulse">
-            LOADING JOURNEY...
+      {/* Loading overlay - only show if very few images are loaded */}
+      {imagesLoaded < 20 && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black z-50 transition-opacity duration-700">
+          <div className="flex flex-col items-center gap-4">
+            <div className="text-white text-xs font-black tracking-[0.5em] animate-pulse">
+              LOADING JOURNEY
+            </div>
+            <div className="w-48 h-[1px] bg-white/10 relative overflow-hidden">
+              <motion.div 
+                className="absolute inset-0 bg-cyan-500"
+                initial={{ x: "-100%" }}
+                animate={{ x: `${(imagesLoaded / FRAME_COUNT) * 100 - 100}%` }}
+              />
+            </div>
           </div>
         </div>
       )}
