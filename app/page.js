@@ -1,50 +1,128 @@
 "use client";
 
-import { useRef } from "react";
-import { useScroll, useTransform, motion } from "framer-motion";
+import { useEffect, useRef } from "react";
+import { gsap } from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
 import SmoothScroll from "./components/SmoothScroll";
 import BusSequence from "./components/BusSequence";
 import StandardHomepage from "./components/StandardHomepage";
 
+gsap.registerPlugin(ScrollTrigger);
+
 export default function Home() {
   const containerRef = useRef(null);
+  const s1Ref = useRef(null);
+  const s2Ref = useRef(null);
+  const s3Ref = useRef(null);
+  const scrollTriggerRef = useRef(null);
 
-  const { scrollYProgress } = useScroll({
-    target: containerRef,
-    offset: ["start start", "end end"],
-  });
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
 
-  // WIDE GAPS to guarantee absolutely zero overlapping of text overlays
-  // Section 1: visible from 0 to 0.1, fades out completely by 0.15
-  const s1Opacity = useTransform(scrollYProgress, [0, 0.1, 0.15], [1, 1, 0]);
-  const s1Y = useTransform(scrollYProgress, [0, 0.15], [0, -100]);
+    const mm = gsap.matchMedia();
 
-  // Section 2: starts fading in at 0.20 (after S1 is completely gone), fully visible 0.25 -> 0.4, fades out by 0.45
-  const s2Opacity = useTransform(scrollYProgress, [0.20, 0.25, 0.4, 0.45], [0, 1, 1, 0]);
-  const s2Y = useTransform(scrollYProgress, [0.20, 0.25], [100, 0]);
+    // Full animation only when user doesn't prefer reduced motion
+    mm.add("(prefers-reduced-motion: no-preference)", () => {
+      // Single ScrollTrigger driving frame animation
+      const st = ScrollTrigger.create({
+        trigger: container,
+        start: "top top",
+        end: "bottom bottom",
+        scrub: true,
+        onUpdate: (self) => {
+          window.__frameManager?.setProgress(self.progress);
+          window.__frameProgress = self.progress;
+        },
+        onRefresh: (self) => {
+          // Sync frame on resize
+          window.__frameManager?.setProgress(self.progress);
+        },
+      });
 
-  // Section 3: starts fading in at 0.50 (after S2 is completely gone), fully visible 0.55 -> 0.75, fades out by 0.8
-  const s3Opacity = useTransform(scrollYProgress, [0.50, 0.55, 0.75, 0.8], [0, 1, 1, 0]);
-  const s3Scale = useTransform(scrollYProgress, [0.50, 0.55], [0.8, 1]);
+      scrollTriggerRef.current = st;
 
-  // Canvas stays fully visible under the StandardHomepage
-  const canvasOpacity = useTransform(scrollYProgress, [0, 1], [1, 1]);
+      // --- Text overlay timeline ---
+      // Maps 1:1 to scroll progress (duration = 1)
+      const tl = gsap.timeline({
+        scrollTrigger: {
+          trigger: container,
+          start: "top top",
+          end: "bottom bottom",
+          scrub: true,
+        },
+      });
+
+      // Section 1: fade out 0 → 0.15 (15% of total scroll)
+      tl.to(s1Ref.current, {
+        opacity: 0,
+        y: -80,
+        ease: "none",
+        duration: 0.15,
+      }, 0);
+
+      // Section 2: fade in 0.20 → 0.25, hold to 0.40, fade out 0.40 → 0.45
+      tl.to(s2Ref.current, {
+        opacity: 1,
+        y: 0,
+        ease: "none",
+        duration: 0.05,
+      }, 0.20);
+      tl.to(s2Ref.current, {
+        opacity: 1,
+        ease: "none",
+        duration: 0.15,
+      }, 0.25);
+      tl.to(s2Ref.current, {
+        opacity: 0,
+        ease: "none",
+        duration: 0.05,
+      }, 0.40);
+
+      // Section 3: scale up + fade in 0.50 → 0.55, hold to 0.75, fade out 0.75 → 0.80
+      tl.to(s3Ref.current, {
+        opacity: 1,
+        scale: 1,
+        ease: "none",
+        duration: 0.05,
+      }, 0.50);
+      tl.to(s3Ref.current, {
+        opacity: 1,
+        scale: 1,
+        ease: "none",
+        duration: 0.20,
+      }, 0.55);
+      tl.to(s3Ref.current, {
+        opacity: 0,
+        ease: "none",
+        duration: 0.05,
+      }, 0.75);
+    });
+
+    // Reduced motion: show first frame only
+    mm.add("(prefers-reduced-motion: reduce)", () => {
+      window.__frameManager?.goTo(0);
+    });
+
+    return () => {
+      mm.revert();
+      scrollTriggerRef.current?.kill();
+      ScrollTrigger.getAll().forEach((s) => s.kill());
+    };
+  }, []);
 
   return (
     <SmoothScroll>
       <main className="relative bg-[#050505]">
-        {/* Cinematic Scroll Container */}
         <div ref={containerRef} className="relative h-[400vh]">
-          {/* Canvas sequence rendered behind everything */}
-          <BusSequence scrollProgress={scrollYProgress} opacity={canvasOpacity} />
+          <BusSequence opacity={1} />
 
-          {/* Sticky wrapper for cinematic text overlays */}
+          {/* Text overlays — sticky to float over canvas */}
           <div className="sticky top-0 h-screen w-full flex items-center justify-center overflow-hidden pointer-events-none z-10">
-            
-            {/* SECTION 1: Intro */}
-            <motion.div 
-              style={{ opacity: s1Opacity, y: s1Y }} 
-              className="absolute inset-0 flex flex-col items-center justify-center text-center px-4"
+            {/* Section 1 */}
+            <div
+              ref={s1Ref}
+              className="absolute inset-0 flex flex-col items-center justify-center text-center px-4 will-change-transform"
             >
               <h1 className="text-5xl md:text-8xl font-black tracking-tighter mb-4 text-white drop-shadow-[0_4px_24px_rgba(0,0,0,0.8)]">
                 Travel Beyond <br /> Boundaries
@@ -53,15 +131,18 @@ export default function Home() {
                 SSP TRAVELS
               </p>
               <div className="mt-12 flex flex-col items-center animate-pulse">
-                <span className="text-xs uppercase tracking-[0.3em] text-white/50 mb-4 drop-shadow-[0_2px_10px_rgba(0,0,0,0.8)]">Scroll to Begin Journey</span>
+                <span className="text-xs uppercase tracking-[0.3em] text-white/50 mb-4 drop-shadow-[0_2px_10px_rgba(0,0,0,0.8)]">
+                  Scroll to Begin Journey
+                </span>
                 <div className="w-[1px] h-16 bg-gradient-to-b from-white/50 to-transparent"></div>
               </div>
-            </motion.div>
+            </div>
 
-            {/* SECTION 2: Motion Sequence */}
-            <motion.div 
-              style={{ opacity: s2Opacity, y: s2Y }} 
-              className="absolute inset-0 flex flex-col items-start justify-center px-8 md:px-32 pt-20"
+            {/* Section 2 */}
+            <div
+              ref={s2Ref}
+              className="absolute inset-0 flex flex-col items-start justify-center px-8 md:px-32 pt-20 will-change-transform"
+              style={{ opacity: 0, transform: "translateY(80px)" }}
             >
               <h2 className="text-4xl md:text-7xl font-bold tracking-tight text-white mb-6 drop-shadow-[0_4px_24px_rgba(0,0,0,0.8)]">
                 <span className="text-gradient-cyan">Luxury</span> Travel
@@ -69,12 +150,13 @@ export default function Home() {
               <p className="text-xl md:text-2xl font-light text-white max-w-xl drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)]">
                 Redefining road journeys with unparalleled comfort, state-of-the-art amenities, and breathtaking views.
               </p>
-            </motion.div>
+            </div>
 
-            {/* SECTION 3: Immersive Storytelling */}
-            <motion.div 
-              style={{ opacity: s3Opacity, scale: s3Scale }} 
-              className="absolute inset-0 flex flex-col items-end justify-center text-right px-8 md:px-32 pt-20"
+            {/* Section 3 */}
+            <div
+              ref={s3Ref}
+              className="absolute inset-0 flex flex-col items-end justify-center text-right px-8 md:px-32 pt-20 will-change-transform"
+              style={{ opacity: 0, transform: "scale(0.8)" }}
             >
               <h2 className="text-4xl md:text-7xl font-bold tracking-tight text-white mb-6 drop-shadow-[0_4px_24px_rgba(0,0,0,0.8)]">
                 Every Journey <br /> <span className="text-gradient-gold">Matters</span>
@@ -82,13 +164,10 @@ export default function Home() {
               <p className="text-xl md:text-2xl font-light text-white max-w-xl ml-auto drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)]">
                 Designed exclusively for travelers who expect nothing but the absolute best.
               </p>
-            </motion.div>
-
+            </div>
           </div>
         </div>
 
-        {/* SECTION 5: Standard Homepage Transition */}
-        {/* Transparent background so the bus frame stays visible underneath */}
         <div className="relative z-20">
           <StandardHomepage />
         </div>

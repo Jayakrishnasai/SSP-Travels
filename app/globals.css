@@ -52,6 +52,16 @@ body {
   pointer-events: none;
 }
 
+canvas {
+  image-rendering: auto;
+  content-visibility: auto;
+}
+
+/* ─── Optimize text overlay repaints ─────────────────────────── */
+.will-change-transform {
+  will-change: transform, opacity;
+}
+
 /* ─── Glassmorphism ──────────────────────────────────────────── */
 .glass {
   background: rgba(255, 255, 255, 0.04);

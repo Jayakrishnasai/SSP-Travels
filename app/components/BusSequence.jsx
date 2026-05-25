@@ -1,131 +1,99 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useMotionValueEvent, motion } from "framer-motion";
+import { useEffect, useRef, useCallback, useState } from "react";
+import FrameManager from "@/lib/FrameManager";
 
-const FRAME_COUNT = 299; // 0 to 298
+const FRAME_COUNT = 299;
 
-const getFramePath = (index) => {
-  return `/FrameBuses/frame_${index.toString().padStart(3, "0")}_delay-0.05s.png`;
-};
-
-export default function BusSequence({ scrollProgress, opacity }) {
+export default function BusSequence({ opacity }) {
   const canvasRef = useRef(null);
-  const imagesRef = useRef([]);
-  const [imagesLoaded, setImagesLoaded] = useState(0);
-  const isMounted = useRef(true);
+  const managerRef = useRef(null);
+  const [loading, setLoading] = useState(true);
+  const [loadCount, setLoadCount] = useState(0);
+  const rafRef = useRef(null);
 
-  // Preload images
+  // Deferred resize: debounced to avoid layout thrashing
+  const handleResize = useCallback(() => {
+    cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(() => {
+      managerRef.current?.resize(window.innerWidth, window.innerHeight);
+    });
+  }, []);
+
   useEffect(() => {
-    isMounted.current = true;
-    const images = [];
-    let loadedCount = 0;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
 
-    // Load in chunks or throttle state updates
-    for (let i = 0; i < FRAME_COUNT; i++) {
-      const img = new Image();
-      img.src = getFramePath(i);
-      img.onload = () => {
-        loadedCount++;
-        // Update state every 10 images or when finished to reduce re-renders
-        if (isMounted.current && (loadedCount % 10 === 0 || loadedCount === FRAME_COUNT)) {
-          setImagesLoaded(loadedCount);
-        }
-      };
-      images.push(img);
-    }
-    imagesRef.current = images;
+    const manager = new FrameManager({
+      frameCount: FRAME_COUNT,
+      isMobile: window.innerWidth < 768 ||
+        (matchMedia?.("(hover: none) and (pointer: coarse)")?.matches ?? false),
+    });
+
+    manager.onLoad((type, index, total) => {
+      if (type === "load") {
+        setLoadCount(total);
+        if (total >= 4) setLoading(false);
+      }
+    });
+
+    // Safety: force-hide loading after 6s even if frames fail
+    const loadingTimeout = setTimeout(() => setLoading(false), 6000);
+
+    manager.attach(canvas);
+    manager.resize(window.innerWidth, window.innerHeight);
+
+    managerRef.current = manager;
+
+    window.addEventListener("resize", handleResize, { passive: true });
 
     return () => {
-      isMounted.current = false;
+      clearTimeout(loadingTimeout);
+      window.removeEventListener("resize", handleResize);
+      cancelAnimationFrame(rafRef.current);
+      manager.destroy();
+      managerRef.current = null;
+    };
+  }, [handleResize]);
+
+  // Expose setProgress for parent to call via ScrollTrigger
+  useEffect(() => {
+    const manager = managerRef.current;
+    if (!manager) return;
+
+    // Attach to window for GSAP ScrollTrigger to call
+    window.__frameManager = manager;
+
+    return () => {
+      delete window.__frameManager;
     };
   }, []);
 
-  // Draw frame on canvas
-  const renderFrame = (index) => {
-    const canvas = canvasRef.current;
-    if (!canvas || imagesRef.current.length === 0) return;
-    
-    const ctx = canvas.getContext("2d", { alpha: false }); // Optimize for opaque images
-    const img = imagesRef.current[index];
-
-    if (img && img.complete) {
-      // Calculate scale to cover the canvas while maintaining aspect ratio
-      const canvasRatio = canvas.width / canvas.height;
-      const imgRatio = img.width / img.height;
-      
-      let drawWidth, drawHeight, offsetX, offsetY;
-
-      if (canvasRatio > imgRatio) {
-        drawWidth = canvas.width;
-        drawHeight = canvas.width / imgRatio;
-        offsetX = 0;
-        offsetY = (canvas.height - drawHeight) / 2;
-      } else {
-        drawHeight = canvas.height;
-        drawWidth = canvas.height * imgRatio;
-        offsetX = (canvas.width - drawWidth) / 2;
-        offsetY = 0;
-      }
-
-      ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
-    }
-  };
-
-  // Resize canvas to match window
-  useEffect(() => {
-    const handleResize = () => {
-      if (canvasRef.current) {
-        const dpr = window.devicePixelRatio || 1;
-        const width = window.innerWidth;
-        const height = window.innerHeight;
-        
-        canvasRef.current.width = width * dpr;
-        canvasRef.current.height = height * dpr;
-        canvasRef.current.style.width = `${width}px`;
-        canvasRef.current.style.height = `${height}px`;
-        
-        const currentIndex = Math.floor(scrollProgress.get() * (FRAME_COUNT - 1));
-        renderFrame(currentIndex);
-      }
-    };
-
-    window.addEventListener("resize", handleResize);
-    handleResize();
-
-    return () => window.removeEventListener("resize", handleResize);
-  }, [scrollProgress]);
-
-  // Update frame on scroll
-  useMotionValueEvent(scrollProgress, "change", (latest) => {
-    const frameIndex = Math.floor(latest * (FRAME_COUNT - 1));
-    renderFrame(frameIndex);
-  });
-
   return (
-    <motion.div 
+    <div
       className="fixed inset-0 z-0 pointer-events-none bg-black"
       style={{ opacity }}
     >
-      <canvas ref={canvasRef} className="w-full h-full block" />
-      
-      {/* Loading overlay - only show if very few images are loaded */}
-      {imagesLoaded < 20 && (
+      <canvas
+        ref={canvasRef}
+        className="block w-full h-full"
+      />
+
+      {loading && (
         <div className="absolute inset-0 flex items-center justify-center bg-black z-50 transition-opacity duration-700">
           <div className="flex flex-col items-center gap-4">
             <div className="text-white text-xs font-black tracking-[0.5em] animate-pulse">
               LOADING JOURNEY
             </div>
             <div className="w-48 h-[1px] bg-white/10 relative overflow-hidden">
-              <motion.div 
-                className="absolute inset-0 bg-cyan-500"
-                initial={{ x: "-100%" }}
-                animate={{ x: `${(imagesLoaded / FRAME_COUNT) * 100 - 100}%` }}
+              <div
+                className="absolute inset-0 bg-cyan-500 transition-transform duration-300"
+                style={{ transform: `translateX(${(loadCount / FRAME_COUNT) * 100 - 100}%)` }}
               />
             </div>
           </div>
         </div>
       )}
-    </motion.div>
+    </div>
   );
 }
