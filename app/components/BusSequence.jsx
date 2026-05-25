@@ -12,7 +12,6 @@ export default function BusSequence({ opacity }) {
   const [loadCount, setLoadCount] = useState(0);
   const rafRef = useRef(null);
 
-  // Deferred resize: debounced to avoid layout thrashing
   const handleResize = useCallback(() => {
     cancelAnimationFrame(rafRef.current);
     rafRef.current = requestAnimationFrame(() => {
@@ -24,10 +23,13 @@ export default function BusSequence({ opacity }) {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
+    const isMobile = window.innerWidth < 768 ||
+      (matchMedia?.("(hover: none) and (pointer: coarse)")?.matches ?? false);
+
     const manager = new FrameManager({
       frameCount: FRAME_COUNT,
-      isMobile: window.innerWidth < 768 ||
-        (matchMedia?.("(hover: none) and (pointer: coarse)")?.matches ?? false),
+      isMobile,
+      bundleUrl: isMobile ? "/bundles/mobile/frames.bundle" : "/bundles/desktop/frames.bundle",
     });
 
     manager.onLoad((type, index, total) => {
@@ -37,7 +39,6 @@ export default function BusSequence({ opacity }) {
       }
     });
 
-    // Safety: force-hide loading after 6s even if frames fail
     const loadingTimeout = setTimeout(() => setLoading(false), 6000);
 
     manager.attach(canvas);
@@ -56,17 +57,11 @@ export default function BusSequence({ opacity }) {
     };
   }, [handleResize]);
 
-  // Expose setProgress for parent to call via ScrollTrigger
   useEffect(() => {
     const manager = managerRef.current;
     if (!manager) return;
-
-    // Attach to window for GSAP ScrollTrigger to call
     window.__frameManager = manager;
-
-    return () => {
-      delete window.__frameManager;
-    };
+    return () => { delete window.__frameManager; };
   }, []);
 
   return (
